@@ -1,11 +1,11 @@
 class Piece
-  attr_accessor :type, :position
+  attr_accessor :type, :en_passant
   attr_reader :color
   
-  def initialize color, type, position
+  def initialize color, type
     @color = color # true for white, false for black
     @type = type
-    @position = position
+    @en_passant = nil
   end
 
   def to_s
@@ -14,7 +14,7 @@ class Piece
     case type
     when 'pawn'
       "♟ "
-    when 'rook' 
+    when 'rook'
       "♜ "
     when 'knight'
       "♞ "
@@ -26,20 +26,4 @@ class Piece
       "♛ "
     end
   end
-=begin
-    when 'pawn'
-      @color ? "♟ " : "♙ "
-    when 'rook' 
-      @color ? "♜ " : "♖ "
-    when 'knight'
-      @color ? "♞ " : "♘ "
-    when 'bishop'
-      @color ? "♝ " : "♗ "
-    when 'king'
-      @color ? "♚ " : "♔ "
-    when 'queen'
-      @color ? "♛ " : "♕ "
-    end
-  end
-=end
 end
