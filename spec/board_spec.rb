@@ -1,5 +1,6 @@
 require './lib/board.rb'
 require './lib/piece.rb'
+require 'rspec'
 
 RSpec.describe Board do
   describe "#available_moves" do
@@ -7,6 +8,8 @@ RSpec.describe Board do
       @board = Board.new
       @mock_board = Array.new(8) { Array.new(8, '  ') }
       @board.instance_variable_set(:@board, @mock_board)
+      @board.instance_variable_set(:@white_king_position, [7, 0])
+      @board.instance_variable_set(:@black_king_position, [7, 2])
     end
 
     context 'basics' do
@@ -41,6 +44,7 @@ RSpec.describe Board do
       end
 
       it "should return the king's moves" do
+        @board.instance_variable_set(:@white_king_position, [3,7])
         @mock_board[2][6] = Piece.new(false, 'pawn')
         @mock_board[4][6] = Piece.new(true, 'pawn')
         @mock_board[3][7] = Piece.new(true, 'king')
@@ -53,5 +57,39 @@ RSpec.describe Board do
         expect(@board.available_moves('f7').sort).to eql(['e6','f6','f5'].sort)
       end
     end
+  end
+
+  describe "#piece_spots" do
+    before(:each) do
+      @board = Board.new
+      @mock_board = Array.new(8) { Array.new(8, '  ') }
+      @board.instance_variable_set(:@board, @mock_board)
+      @board.instance_variable_set(:@white_king_position, [7,0])
+      @board.instance_variable_set(:@black_king_position, [7, 2])
+    end
+
+    context "while in check" do
+      it "should return only the pieces that when moved uncheck the king" do
+        @board.instance_variable_set(:@white_king_position, [6, 4])
+        @mock_board[2][4] = Piece.new(false,'rook')
+        @mock_board[4][1] = Piece.new(false,'bishop')
+        @mock_board[7][3] = Piece.new(false,'bishop')
+        @mock_board[5][3] = Piece.new(true,'rook')
+        @mock_board[5][5] = Piece.new(true,'pawn')
+        @mock_board[6][4] = Piece.new(true,'king')
+        expect(@board.piece_spots(true).sort).to eql(['e7'].sort)
+      end
+    end
+'''
+    context "while in checkmate" do
+      it "should return an empty array" do
+        @mock_board[][] = Piece.new(,'')
+        @mock_board[][] = Piece.new(,'')
+        @mock_board[][] = Piece.new(,'')
+        @mock_board[][] = Piece.new(,'')
+        @mock_board[][] = Piece.new(,'')
+      end
+      end
+'''
   end
 end

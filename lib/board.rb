@@ -37,16 +37,54 @@ class Board
       end
     end
 
-    @black_king_position = [0,3]
-    @white_king_posision = [7,4]
-    @en_passant = false
+    @black_king_position = [0,4]
+    @white_king_position = [7,4]
+  end
+
+  #Precondition: 'from' is a valid position.
+  def available_moves from, check=true
+    from_position = text_to_pos(from)
+    piece = @board[from_position[0]][from_position[1]]
+    moves = []
+
+    case piece.type
+    when 'bishop'
+      moves = bishop_moves piece.color, from_position
+    when 'king'
+      moves = king_moves piece.color, from_position
+    when 'knight'
+      moves = knight_moves piece.color, from_position
+    when 'pawn'
+      moves = pawn_moves piece.color, from_position
+    when 'queen'
+      moves = queen_moves piece.color, from_position
+    when 'rook'
+      moves = rook_moves piece.color, from_position
+    end
+
+    if check
+      board = @board.map { |arr| arr.map(&:clone) }
+      wkp = @white_king_position
+      bkp = @black_king_position
+      final_moves = moves.select do |to|
+        move(from, to)
+        answer = !in_check?(piece.color)
+        @board = board.map { |arr| arr.map(&:clone) }
+        @white_king_position = wkp
+        @black_king_position = bkp
+        answer
+      end
+      final_moves
+    else
+      moves
+    end
   end
 
   def display
     counter = 0
     puts "  " + "  a b c d e f g h   ".bg_red
     @board.each_with_index do |row, i| 
-      print "  " + "#{8-i} ".bg_red 
+      print "  " + "#{i + 1} ".bg_red 
       row.each do |spot|
         square = spot.to_s
         if spot.is_a?(Piece) && !spot.color
@@ -55,54 +93,64 @@ class Board
         print counter % 2 == 0 ? square.bg_blue : square.bg_brown
         counter += 1
       end 
-      puts " #{8-i}".bg_red
+      puts " #{i + 1}".bg_red
       counter += 1
     end
     puts "  " + "  a b c d e f g h   ".bg_red
   end
+
+  def in_check? color
+    opponents = []
+    board = @board.map { |arr| arr.map(&:clone) }
+    board.each_with_index do |v, i|
+      v.each_with_index do |opponent, j|
+        position = pos_to_text(i, j)
+        if opponent.is_a?(Piece) && opponent.color != color
+          opponents << position
+        end
+      end
+    end
+    king_pos = color ? pos_to_text(@white_king_position[0], @white_king_position[1]) : pos_to_text(@black_king_position[0], @black_king_position[1])
+
   
+    opponents.each do |opponent| 
+      moves = available_moves(opponent, false)
+      return true if moves.include?(king_pos)
+    end
+    false
+  end
+
   #Precondition: 'from' and 'to' are valid positions.
   def move from, to
     from_pos = text_to_pos(from)
     to_pos = text_to_pos(to)
     piece = @board[from_pos[0]][from_pos[1]]
+    if piece.type == 'king'
+      piece.color ? @white_king_position = to_pos : @black_king_position = to_pos
+    end
     @board[from_pos[0]][from_pos[1]] = '  '
     @board[to_pos[0]][to_pos[1]] = piece
-  end
-
-  #Precondition: 'from' is a valid position.
-  def available_moves from
-    from_position = text_to_pos(from)
-    piece = @board[from_position[0]][from_position[1]]
-
-    case piece.type
-    when 'bishop'
-      bishop_moves piece.color, from_position
-    when 'king'
-      king_moves piece.color, from_position
-    when 'knight'
-      knight_moves piece.color, from_position
-    when 'pawn'
-      pawn_moves piece.color, from_position
-    when 'queen'
-      queen_moves piece.color, from_position
-    when 'rook'
-      rook_moves piece.color, from_position
-    end
   end
 
   #Return the positions of all the pieces of a color.
   def piece_spots color
     spots = []
-    @board.each_with_index do |v, i|
+    board = @board.map { |arr| arr.map(&:clone) }
+    board.each_with_index do |v, i|
       v.each_with_index do |spot, j|
         position = pos_to_text(i, j)
-        if spot.is_a?(Piece) && spot.color == color && available_moves(position).length != 0
-          spots << position
-        end
+        spots << position if spot.is_a?(Piece) && (spot.color == color) && !available_moves(position).empty?
       end
     end
     spots
+  end
+  # to test certain things
+  def set_up
+    @board = Array.new(8) { Array.new(8, '  ') }
+    @white_king_position = [7,0]
+    @board[7][0] = Piece.new(true, 'king')
+    @board[0][0] = Piece.new(false, 'rook')
+    @board[0][1] = Piece.new(false, 'rook')
   end
 
   private
@@ -238,13 +286,13 @@ class Board
     moves = []
     i = color ? 1 : -1
     #normal move
-    moves << pos_to_text(pos[0] - i, pos[1]) if !@board[pos[0] - i].nil? && @board[pos[0] - i][pos[1]] == '  '
+    moves << pos_to_text(pos[0] - i, pos[1]) if !@board[pos[0] - i].nil? && pos[0] - i != -1 && @board[pos[0] - i][pos[1]] == '  '
     #double initial move
     moves << pos_to_text(pos[0] - (2 * i), pos[1]) if ((color && (pos[0] == 6)) || (!color && (pos[0] == 1))) && (moves.length) == 1 && (@board[pos[0] - (2 * i)][pos[1]] == '  ')
     #attack left or right - depends on i
-    moves << pos_to_text(pos[0] - i, pos[1] + i) if !@board[pos[0] - i].nil? && @board[pos[0] - i][pos[1] + i].is_a?(Piece) && @board[pos[0] - i][pos[1] + i].color != color
+    moves << pos_to_text(pos[0] - i, pos[1] + i) if !@board[pos[0] - i].nil? && pos[0] - i != -1 && @board[pos[0] - i][pos[1] + i].is_a?(Piece) && @board[pos[0] - i][pos[1] + i].color != color
     #attack left or right - depends on i
-    moves << pos_to_text(pos[0] - i, pos[1] - i) if !@board[pos[0] - i].nil? && @board[pos[0] - i][pos[1] - i].is_a?(Piece) && @board[pos[0] - i][pos[1] - i].color != color
+    moves << pos_to_text(pos[0] - i, pos[1] - i) if !@board[pos[0] - i].nil? && pos[0] - i != -1 && pos[1] - 1 != -1 && @board[pos[0] - i][pos[1] - i].is_a?(Piece) && @board[pos[0] - i][pos[1] - i].color != color
     #TO BE IMPLEMENTED en passant left or right
     moves
   end
@@ -274,15 +322,17 @@ class Board
   end
 end
 
-=begin
+
 a = Board.new
-100.times do |i|
+#a.set_up
+300.times do |i|
   a.display
   moveables = a.piece_spots(i % 2 == 0)
+  break if moveables.empty?
   chosen = moveables.sample
   a.move(chosen, a.available_moves(chosen).sample)
-  sleep(1)
+  sleep(0.3)
   system("clear")
 end
 display
-=end
+
