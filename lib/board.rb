@@ -31,7 +31,6 @@ class Board
       @board[vals[1]].each_with_index do |v, i|
         @board[vals[1]][i] = Piece.new vals[0], "pawn"
       end
-
       @board[vals[2]].each_with_index { |v, i| @board[vals[2]][i] = Piece.new vals[0], pieces[i] }
     end
 
@@ -125,6 +124,25 @@ class Board
     false
   end
 
+  def marshal_dump
+    m_board = @board.map { |row| row.map { |piece| piece.is_a?(Piece) ? [piece.color, piece.type, piece.unmoved] : piece } }
+    [m_board, @black_king_position, @white_king_position, @en_passant, @ep_receiver, @ep_end, @castle, @castle_inf_loop_prev]
+  end
+
+  def marshal_load array
+    @black_king_position, @white_king_position, @en_passant, @ep_receiver, @ep_end, @castle, @castle_inf_loop_prev = array[1..-1]
+    @board = array[0].map do |row| 
+      row.map do |piece| 
+        if piece.is_a?(Array)
+          a = Piece.new(piece[0], piece[1])
+          a.unmoved = piece[2] 
+          a
+        else
+          piece
+        end
+      end
+    end
+  end
   #Precondition: 'from' and 'to' are valid positions.
   def move from, to, legit = true
     
