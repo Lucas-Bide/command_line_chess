@@ -32,9 +32,7 @@ class Board
         @board[vals[1]][i] = Piece.new vals[0], "pawn"
       end
 
-      @board[vals[2]].each_with_index do |v, i|
-        @board[vals[2]][i] = Piece.new vals[0], pieces[i] #pos display is [+1, (+97).chr]
-      end
+      @board[vals[2]].each_with_index { |v, i| @board[vals[2]][i] = Piece.new vals[0], pieces[i] }
     end
 
     @black_king_position = [0,4]
@@ -191,12 +189,9 @@ class Board
   # to test certain things
   def set_up
     @board = Array.new(8) { Array.new(8, '  ') }
-    @board[7][7] = Piece.new(true, 'rook')
-    @board[7][4] = Piece.new(true, 'king')
-    display
-    available_moves('e8')
-    move('e8', 'g8')
-    display
+    @board[0][4] = Piece.new(false, 'king')
+    @board[3][5] = Piece.new(true, 'king')
+    @board[2][3] = Piece.new(true, 'queen')
   end
 
   private
@@ -421,11 +416,11 @@ class Board
   end
 end
 
-a = Board.new
-a.set_up
+
 ##
 =begin
-
+a = Board.new
+a.set_up
 300.times do |i|
   a.display
   moveables = a.piece_spots(i % 2 == 0)
