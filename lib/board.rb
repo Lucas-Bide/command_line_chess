@@ -39,30 +39,39 @@ class Board
 
     @black_king_position = [0,4]
     @white_king_position = [7,4]
+
+    @en_passant = false
+    @ep_receiver = nil
+    @ep_end = nil
+
+    @castle = false
+    @castle_inf_loop_prev = true
   end
 
   #Precondition: 'from' is a valid position.
-  def available_moves from, check=true
-    from_position = text_to_pos(from)
-    piece = @board[from_position[0]][from_position[1]]
+  def available_moves from, check=false
+    from_pos = text_to_pos(from)
+    piece = @board[from_pos[0]][from_pos[1]]
     moves = []
 
     case piece.type
     when 'bishop'
-      moves = bishop_moves piece.color, from_position
+      moves = bishop_moves piece.color, from_pos
     when 'king'
-      moves = king_moves piece.color, from_position
+      moves = king_moves piece.color, from_pos
     when 'knight'
-      moves = knight_moves piece.color, from_position
+      moves = knight_moves piece.color, from_pos
     when 'pawn'
-      moves = pawn_moves piece.color, from_position
+      moves = pawn_moves piece.color, from_pos
     when 'queen'
-      moves = queen_moves piece.color, from_position
+      moves = queen_moves piece.color, from_pos
     when 'rook'
-      moves = rook_moves piece.color, from_position
+      moves = rook_moves piece.color, from_pos
     end
 
     if check
+      moves
+    else
       board = @board.map { |arr| arr.map(&:clone) }
       wkp = @white_king_position
       bkp = @black_king_position
@@ -75,8 +84,6 @@ class Board
         answer
       end
       final_moves
-    else
-      moves
     end
   end
 
@@ -114,7 +121,7 @@ class Board
 
   
     opponents.each do |opponent| 
-      moves = available_moves(opponent, false)
+      moves = available_moves(opponent, true)
       return true if moves.include?(king_pos)
     end
     false
@@ -122,21 +129,53 @@ class Board
 
   #Precondition: 'from' and 'to' are valid positions.
   def move from, to, legit = true
+    
     from_pos = text_to_pos(from)
     to_pos = text_to_pos(to)
     piece = @board[from_pos[0]][from_pos[1]]
     if piece.type == 'king'
+      if @castle && (to_pos[1] == 2 || to_pos[1] == 6)
+        is_left = to_pos[1] == 2
+        rook = is_left ? @board[from_pos[0]][0] : @board[from_pos[0]][7]
+        rook.unmoved = false
+        if is_left
+          @board[from_pos[0]][0] = '  '
+          @board[from_pos[0]][3] = rook
+        else
+          @board[from_pos[0]][7] = '  '
+          @board[from_pos[0]][5] = rook
+        end
+      end
       piece.color ? @white_king_position = to_pos : @black_king_position = to_pos
     end
     @board[from_pos[0]][from_pos[1]] = '  '
     @board[to_pos[0]][to_pos[1]] = piece
 
-    if legit && piece.type == 'pawn' && ((piece.color && to_pos[0] == 0) || (!piece.color && to_pos[0] == 7))
-      promote(to)
+    if @en_passant && piece.type == 'pawn' && to == @ep_end
+      @board[@ep_receiver[0]][@ep_receiver[1]] = '  '
+    end
+
+    #when not detecting check
+    if legit
+      piece.unmoved = false if piece.unmoved
+      @castle = false if @castle
+      @en_passant = false if @en_passant
+      if piece.type == 'pawn'
+        promote(to) if (piece.color && to_pos[0] == 0) || (!piece.color && to_pos[0] == 7)
+        if (from[1].to_i - to[1].to_i).abs == 2
+          lefty = @board[to_pos[0]][to_pos[1] - 1]
+          righty = @board[to_pos[0]][to_pos[1] + 1]
+          if (!lefty.nil?  && lefty.is_a?(Piece) && (lefty.type == 'pawn') && lefty.color != piece.color) || (!righty.nil? && righty.is_a?(Piece) && (righty.type == 'pawn') && righty.color != piece.color)
+            @en_passant = true
+            @ep_receiver = to_pos
+            @ep_end = pos_to_text(@ep_receiver[0] == 3 ? @ep_receiver[0] -1 : @ep_receiver[0] - 1, @ep_receiver[1])
+          end
+        end
+      end
     end
   end
 
-  #Return the positions of all the pieces of a color.
+  #Return the positions of all the pieces of a color with moves.
   def piece_spots color
     spots = []
     board = @board.map { |arr| arr.map(&:clone) }
@@ -148,67 +187,89 @@ class Board
     end
     spots
   end
+  
   # to test certain things
   def set_up
     @board = Array.new(8) { Array.new(8, '  ') }
-    @white_king_position = [7,0]
-    @board[7][0] = Piece.new(true, 'king')
-    @board[0][0] = Piece.new(false, 'rook')
-    @board[0][1] = Piece.new(false, 'rook')
+    @board[7][7] = Piece.new(true, 'rook')
+    @board[7][4] = Piece.new(true, 'king')
+    display
+    available_moves('e8')
+    move('e8', 'g8')
+    display
   end
 
   private
 
+  def castle_check row, s1, s2
+    board = @board.map { |arr| arr.map(&:clone) }
+    wkp = @white_king_position
+    bkp = @black_king_position
+      
+    from = row == 0 ? 'e1' : 'e8'
+    to = pos_to_text(row, s1)
+    move(from, to, false)
+    answer1 = !in_check?(row == 7)
+    from = to
+    to = pos_to_text(row, s2)
+    answer2 = !in_check?(row == 7)
+
+    @board = board.map { |arr| arr.map(&:clone) }
+    @white_king_position = wkp
+    @black_king_position = bkp
+    answer1 && answer2
+  end
+
   def check_diagonal_bottom color, pos, moves, left_right
-    spot = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
+    piece = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
     if pos[0] < 0 || pos[0] > 7 || pos[1] < 0 || pos[1] > 7
       moves
-    elsif spot == "  "
+    elsif piece == "  "
       moves << pos_to_text(pos[0], pos[1])
       check_diagonal_bottom(color, [pos[0] + 1, pos[1] + left_right], moves, left_right)
     else 
-      moves << pos_to_text(pos[0], pos[1]) if spot.color != color
+      moves << pos_to_text(pos[0], pos[1]) if piece.color != color
       moves
     end
   end
 
   def check_diagonal_top color, pos, moves, left_right
-    spot = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
+    piece = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
     if pos[0] < 0 || pos[0] > 7 || pos[1] < 0 || pos[1] > 7
       moves
-    elsif spot == "  "
+    elsif piece == "  "
       moves << pos_to_text(pos[0], pos[1])
       check_diagonal_top(color, [pos[0] - 1, pos[1] + left_right], moves, left_right)
     else 
-      moves << pos_to_text(pos[0], pos[1]) if spot.color != color
+      moves << pos_to_text(pos[0], pos[1]) if piece.color != color
       moves
     end
   end
 
   #left_right is 1 or -1
   def check_horizontal color, pos, moves, left_right
-    spot = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
+    piece = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
     if pos[0] < 0 || pos[0] > 7 || pos[1] < 0 || pos[1] > 7
       moves
-    elsif spot == "  "
+    elsif piece == "  "
       moves << pos_to_text(pos[0], pos[1])
       check_horizontal(color, [pos[0], pos[1] + left_right], moves, left_right)
     else 
-      moves << pos_to_text(pos[0], pos[1]) if spot.color != color
+      moves << pos_to_text(pos[0], pos[1]) if piece.color != color
       moves
     end
   end
 
   #up_down is 1 or -1
   def check_vertical color, pos, moves, up_down
-    spot = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
+    piece = @board[pos[0]].nil? ? nil : @board[pos[0]][pos[1]]
     if pos[0] < 0 || pos[0] > 7 || pos[1] < 0 || pos[1] > 7
       moves
-    elsif spot == "  "
+    elsif piece == "  "
       moves << pos_to_text(pos[0], pos[1])
       check_vertical(color, [pos[0] + up_down, pos[1]], moves, up_down)
     else 
-      moves << pos_to_text(pos[0], pos[1]) if spot.color != color
+      moves << pos_to_text(pos[0], pos[1]) if piece.color != color
       moves
     end
   end
@@ -224,7 +285,7 @@ class Board
 
   def king_moves color, pos
     moves = []
-    spot = @board[pos[0]][pos[1]]
+    piece = @board[pos[0]][pos[1]]
       
     down_valid = pos[0] < 7 
     up_valid = pos[0] > 0 
@@ -236,21 +297,43 @@ class Board
     ur_valid = up_valid && right_valid
 
     adjacent = right_valid ? @board[pos[0]][pos[1] + 1] : false
-    moves << pos_to_text(pos[0], pos[1] + 1) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0], pos[1] + 1) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = left_valid ? @board[pos[0]][pos[1] - 1] : false
-    moves << pos_to_text(pos[0], pos[1] - 1) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0], pos[1] - 1) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = down_valid ? @board[pos[0] + 1][pos[1]] : false
-    moves << pos_to_text(pos[0] + 1, pos[1]) if  adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0] + 1, pos[1]) if  adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = up_valid ? @board[pos[0] - 1][pos[1]] : false
-    moves << pos_to_text(pos[0] - 1, pos[1]) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0] - 1, pos[1]) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = dr_valid ? @board[pos[0] + 1][pos[1] + 1] : false
-    moves << pos_to_text(pos[0] + 1, pos[1] + 1) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0] + 1, pos[1] + 1) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = dl_valid ? @board[pos[0] + 1][pos[1] - 1] : false
-    moves << pos_to_text(pos[0] + 1, pos[1] - 1) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0] + 1, pos[1] - 1) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = ur_valid ? @board[pos[0] - 1][pos[1] + 1] : false
-    moves << pos_to_text(pos[0] - 1, pos[1] + 1) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0] - 1, pos[1] + 1) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
     adjacent = ul_valid ? @board[pos[0] - 1][pos[1] - 1] : false
-    moves << pos_to_text(pos[0] - 1, pos[1] - 1) if adjacent && (adjacent == '  ' || adjacent.color !=  spot.color)
+    moves << pos_to_text(pos[0] - 1, pos[1] - 1) if adjacent && (adjacent == '  ' || adjacent.color !=  piece.color)
+
+    
+    #puts "about to check if king is in check to then see if castling is available"
+    if @castle_inf_loop_prev && piece.unmoved
+      @castle_inf_loop_prev = false
+      if !in_check?(piece.color) 
+        row = piece.color ? 7 : 0
+        left_rook = @board[row][0]
+        right_rook = @board[row][7]
+     #   puts"so king isn't in check. Verifying left"
+        if left_rook.is_a?(Piece) && left_rook.unmoved && (@board[row][2] == '  ' && @board[row][3] == '  ') && castle_check(row, 3, 2)
+          moves << pos_to_text(row, 2)
+          @castle = true
+        end
+      #  puts "verifying right"
+        if right_rook.is_a?(Piece) && right_rook.unmoved && (@board[row][5] == '  ' && @board[row][6] == '  ') && castle_check(row, 5, 6)
+          moves << pos_to_text(row, 6) 
+          @castle = true
+        end
+      end
+      @castle_inf_loop_prev = true
+    end
     moves
   end
 
@@ -297,7 +380,8 @@ class Board
     moves << pos_to_text(pos[0] - i, pos[1] + i) if !@board[pos[0] - i].nil? && pos[0] - i != -1 && @board[pos[0] - i][pos[1] + i].is_a?(Piece) && @board[pos[0] - i][pos[1] + i].color != color
     #attack left or right - depends on i
     moves << pos_to_text(pos[0] - i, pos[1] - i) if !@board[pos[0] - i].nil? && pos[0] - i != -1 && pos[1] - 1 != -1 && @board[pos[0] - i][pos[1] - i].is_a?(Piece) && @board[pos[0] - i][pos[1] - i].color != color
-    #TO BE IMPLEMENTED en passant left or right
+    #en passant
+    moves << @ep_end if @en_passant && ((pos == [@ep_receiver[0], @ep_receiver[1] + 1]) || (pos == [@ep_receiver[0], @ep_receiver[1] - 1] && pos[1] != 7))
     moves
   end
 
@@ -337,17 +421,20 @@ class Board
   end
 end
 
-=begin
 a = Board.new
-#a.set_up
+a.set_up
+##
+=begin
+
 300.times do |i|
   a.display
   moveables = a.piece_spots(i % 2 == 0)
   break if moveables.empty?
   chosen = moveables.sample
   a.move(chosen, a.available_moves(chosen).sample)
-  sleep(0.1)
+  gets#sleep(0.5)
   system("clear")
 end
 a.display
 =end
+#

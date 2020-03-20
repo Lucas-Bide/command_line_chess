@@ -1,11 +1,11 @@
 class Piece
-  attr_accessor :type, :en_passant
-  attr_reader :color
+  attr_accessor :unmoved
+  attr_reader :color, :type 
   
   def initialize color, type
     @color = color # true for white, false for black
     @type = type
-    @en_passant = nil
+    @unmoved = true
   end
 
   def to_s
