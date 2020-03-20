@@ -67,7 +67,7 @@ class Board
       wkp = @white_king_position
       bkp = @black_king_position
       final_moves = moves.select do |to|
-        move(from, to)
+        move(from, to, false)
         answer = !in_check?(piece.color)
         @board = board.map { |arr| arr.map(&:clone) }
         @white_king_position = wkp
@@ -121,7 +121,7 @@ class Board
   end
 
   #Precondition: 'from' and 'to' are valid positions.
-  def move from, to
+  def move from, to, legit = true
     from_pos = text_to_pos(from)
     to_pos = text_to_pos(to)
     piece = @board[from_pos[0]][from_pos[1]]
@@ -130,6 +130,10 @@ class Board
     end
     @board[from_pos[0]][from_pos[1]] = '  '
     @board[to_pos[0]][to_pos[1]] = piece
+
+    if legit && piece.type == 'pawn' && ((piece.color && to_pos[0] == 0) || (!piece.color && to_pos[0] == 7))
+      promote(to)
+    end
   end
 
   #Return the positions of all the pieces of a color.
@@ -301,6 +305,17 @@ class Board
     (c+97).chr + "#{r + 1}"
   end
 
+  def promote spot
+    pos = text_to_pos(spot)
+    puts "Choose a piece to promote your pawn to: knight, rook, bishop, queen"
+    answer = gets.chomp.downcase
+    while !['knight', 'rook', 'bishop', 'queen'].include?(answer)
+      puts "Enter a valid option"
+      answer = gets.chomp.downcase
+    end
+    @board[pos[0]][pos[1]] = Piece.new(pos[0] == 0, answer)
+  end
+
   def queen_moves color, pos
     moves = []
     moves += bishop_moves(color, pos)
@@ -322,7 +337,7 @@ class Board
   end
 end
 
-
+=begin
 a = Board.new
 #a.set_up
 300.times do |i|
@@ -331,8 +346,8 @@ a = Board.new
   break if moveables.empty?
   chosen = moveables.sample
   a.move(chosen, a.available_moves(chosen).sample)
-  sleep(0.3)
+  sleep(0.1)
   system("clear")
 end
-display
-
+a.display
+=end
